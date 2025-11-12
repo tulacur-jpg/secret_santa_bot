@@ -235,18 +235,30 @@ async def draw(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     if not TOKEN:
         raise RuntimeError("Переменная окружения BOT_TOKEN не задана.")
+
     app = Application.builder().token(TOKEN).build()
 
+    # handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("list", list_cmd))
     app.add_handler(CommandHandler("remove", remove_cmd))
     app.add_handler(CommandHandler("reset", reset_cmd))
     app.add_handler(CommandHandler("draw", draw))
-
     app.add_handler(MessageHandler(filters.CONTACT, handle_contact))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
-    app.run_polling()
+    # === ВАЖНО: запускаем как WEBHOOK, а не polling ===
+    # Render отдаёт внешнюю ссылку в переменную окружения RENDER_EXTERNAL_URL
+    public_url = os.getenv("WEBHOOK_URL") or os.getenv("RENDER_EXTERNAL_URL")
+    if not public_url:
+        raise RuntimeError("Не найден WEBHOOK_URL/RENDER_EXTERNAL_URL. На Render это выставляется автоматически.")
 
-if __name__ == "__main__":
-    main()
+    port = int(os.getenv("PORT", "10000"))  # Render сам прокидывает PORT
+
+    # application сам поднимет aiohttp-сервер и подпишется на этот URL
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=port,
+        url_path=TOKEN,
+        webhook_url=f"{public_url}/{TOKEN}",
+    )
